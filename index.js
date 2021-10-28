@@ -9,27 +9,40 @@ var module = (function() {
     const _KLAY_TOKEN     = '0x0000000000000000000000000000000000000000'; // Cypress and Baobab
     
     const _TOKEN_DECIMALS = { [ _KLAY_TOKEN.toLowerCase() ]: 18 }
+    
+    var _swap_graph = {}, _graph_expired_date = Date.now();
+    var _swap_graph_valid_time = 1 * 60 * 1000; // 1 minute
 
     function _build_swap_graph() {
-        return _get_pool_list()
-            .then((pools) => {
-                return _get_pool_status(pools);
-            })
-            .then((status) => {
-                var graph = {};
+        if (Object.keys(_swap_graph).length === 0 || Date.now() > _graph_expired_date) {
+            return _get_pool_list()
+                .then((pools) => {
+                    return _get_pool_status(pools);
+                })
+                .then((status) => {
+                    var graph = {};
     
-                Object.keys(status).forEach((pool) => {
-                    var [ tokenA, tokenB, amountA, amountB ] = status[pool];
+                    Object.keys(status).forEach((pool) => {
+                        var [ tokenA, tokenB, amountA, amountB ] = status[pool];
     
-                    if (!(tokenA in graph)) graph[tokenA] = { edges: {} };
-                    if (!(tokenB in graph)) graph[tokenB] = { edges: {} };
+                        if (!(tokenA in graph)) graph[tokenA] = { edges: {} };
+                        if (!(tokenB in graph)) graph[tokenB] = { edges: {} };
     
-                    graph[tokenA].edges[tokenB] = [ klaytn.utils.value_to_number(amountA), klaytn.utils.value_to_number(amountB) ];
-                    graph[tokenB].edges[tokenA] = [ klaytn.utils.value_to_number(amountB), klaytn.utils.value_to_number(amountA) ];
+                        graph[tokenA].edges[tokenB] = [ klaytn.utils.value_to_number(amountA), klaytn.utils.value_to_number(amountB) ];
+                        graph[tokenB].edges[tokenA] = [ klaytn.utils.value_to_number(amountB), klaytn.utils.value_to_number(amountA) ];
+                    });
+    
+                    return graph;
+                })
+                .then((graph) => {
+                    _swap_graph = graph;
+                    _graph_expired_date = Date.now() + _swap_graph_valid_time;
+
+                    return graph;
                 });
-    
-                return graph;
-            });
+        } else {
+            return Promise.resolve(_swap_graph);
+        }
     }
     
     function _find_swap_path(graph, from, amount, to) {
@@ -696,7 +709,11 @@ var module = (function() {
 
         cache_token_decimals: (token, decimals) => {
             _TOKEN_DECIMALS[token.toLowerCase()] = decimals;
-        }
+        },
+
+        set_swap_graph_valid_time: (time) => {
+            _swap_graph_valid_time = time;
+        },
     }
 })();
 
